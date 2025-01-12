@@ -1,7 +1,6 @@
 package me.iacn.biliroaming.hook
 
 import android.app.Activity
-import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -27,8 +26,16 @@ class SettingHook(classLoader: ClassLoader) : BaseHook(classLoader) {
         instance.mainActivityClass?.hookAfterMethod("onResume") { param ->
             if (startSetting) {
                 startSetting = false
-                SettingDialog(param.thisObject as Activity).show()
+                SettingDialog.show(param.thisObject as Activity)
             }
+        }
+
+        instance.mainActivityClass?.hookBeforeMethod(
+            "onCreate",
+            Bundle::class.java
+        ) { param ->
+            val bundle = param.args[0] as? Bundle
+            bundle?.remove("android:fragments")
         }
 
         instance.drawerClass?.hookAfterMethod(
@@ -43,35 +50,43 @@ class SettingHook(classLoader: ClassLoader) : BaseHook(classLoader) {
             (param.thisObject.getObjectField(nav)
                 ?: param.result).callMethodAs<View>("findViewById", navSettingId)
                 .setOnLongClickListener {
-                    SettingDialog(param.thisObject.callMethodAs<Activity>("getActivity")).show()
+                    SettingDialog.show(param.thisObject.callMethodAs<Activity>("getActivity"))
                     true
                 }
         }
 
-        instance.homeUserCenterClass?.hookBeforeAllMethods(
-            instance.addSetting()
-        ) { param ->
-            val lastGroup = (param.args[1] as MutableList<*>).lastOrNull()
-                ?: return@hookBeforeAllMethods
+        instance.homeCenters().forEach { (c, m) ->
+            c?.hookBeforeAllMethods(m) { param ->
+                @Suppress("UNCHECKED_CAST")
+                val list = param.args[1] as? MutableList<Any>
+                    ?: param.args[1]?.getObjectFieldOrNullAs<MutableList<Any>>("moreSectionList")
+                    ?: return@hookBeforeAllMethods
 
-            val itemList =
-                if (lastGroup.javaClass != instance.menuGroupItemClass) lastGroup.getObjectFieldAs<MutableList<Any>?>(
-                    "itemList"
-                ) else param.args[1] as MutableList<Any>
+                val itemList = list.lastOrNull()?.let {
+                    if (it.javaClass != instance.menuGroupItemClass) it.getObjectFieldOrNullAs<MutableList<Any>>(
+                        "itemList"
+                    ) else list
+                } ?: list
 
-            val item = instance.menuGroupItemClass?.new() ?: return@hookBeforeAllMethods
-            item.setIntField("id", SETTING_ID)
-                .setObjectField("title", "哔哩漫游设置")
-                .setObjectField(
-                    "icon",
-                    "https://i0.hdslb.com/bfs/album/276769577d2a5db1d9f914364abad7c5253086f6.png"
-                )
-                .setObjectField("uri", SETTING_URI)
-
-            itemList?.forEach {
-                if (try { it.getIntField("id") == SETTING_ID } catch (t: Throwable) { it.getLongField("id") == SETTING_ID.toLong() }) return@hookBeforeAllMethods
+                val item = instance.menuGroupItemClass?.new() ?: return@hookBeforeAllMethods
+                item.setIntField("id", SETTING_ID)
+                    .setObjectField("title", "哔哩漫游设置")
+                    .setObjectField(
+                        "icon",
+                        "https://i0.hdslb.com/bfs/album/276769577d2a5db1d9f914364abad7c5253086f6.png"
+                    )
+                    .setObjectField("uri", SETTING_URI)
+                    .setIntField("visible", 1)
+                itemList.forEach {
+                    if (try {
+                            it.getIntField("id") == SETTING_ID
+                        } catch (t: Throwable) {
+                            it.getLongField("id") == SETTING_ID.toLong()
+                        }
+                    ) return@hookBeforeAllMethods
+                }
+                itemList.add(item)
             }
-            itemList?.add(item)
         }
 
         instance.settingRouterClass?.hookBeforeAllConstructors { param ->
@@ -93,7 +108,7 @@ class SettingHook(classLoader: ClassLoader) : BaseHook(classLoader) {
                                 method2.parameterTypes[0].name == "android.app.Activity"
                             ) {
                                 val currentActivity = args[0] as Activity
-                                SettingDialog(currentActivity).show()
+                                SettingDialog.show(currentActivity)
                             }
                             null
                         }

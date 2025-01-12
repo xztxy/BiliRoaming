@@ -1,15 +1,17 @@
 -repackageclasses "biliroaming"
 
--keep class * implements de.robv.android.xposed.IXposedHookLoadPackage {
-    public void *(de.robv.android.xposed.callbacks.XC_LoadPackage$LoadPackageParam);
-}
-
--keep class * implements de.robv.android.xposed.IXposedHookInitPackageResources {
-    public void *(de.robv.android.xposed.callbacks.XC_InitPackageResources$InitPackageResourcesParam);
+-keep class me.iacn.biliroaming.XposedInit {
+    <init>();
 }
 
 -keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
   <fields>;
+}
+
+-keepclasseswithmembers class me.iacn.biliroaming.utils.DexHelper {
+ native <methods>;
+ long token;
+ java.lang.ClassLoader classLoader;
 }
 
 -keepattributes RuntimeVisible*Annotations
@@ -29,6 +31,10 @@
 -assumenosideeffects class kotlin.jvm.internal.Intrinsics {
     public static void check*(...);
     public static void throw*(...);
+}
+
+-assumenosideeffects class java.util.Objects {
+    public static ** requireNonNull(...);
 }
 
 -allowaccessmodification

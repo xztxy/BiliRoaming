@@ -12,6 +12,7 @@ import de.robv.android.xposed.XposedHelpers.*
 import de.robv.android.xposed.callbacks.XC_LayoutInflated
 import java.lang.reflect.Field
 import java.lang.reflect.Member
+import java.lang.reflect.Modifier
 import java.util.*
 
 typealias MethodHookParam = MethodHookParam
@@ -117,7 +118,7 @@ inline fun Class<*>.hookAfterAllMethods(methodName: String?, crossinline hooker:
 
     })
 
-inline fun Class<*>.replaceAfterAllMethods(methodName: String?, crossinline replacer: Replacer) =
+inline fun Class<*>.replaceAllMethods(methodName: String?, crossinline replacer: Replacer) =
     hookAllMethods(methodName, object : XC_MethodReplacement() {
         override fun replaceHookedMethod(param: MethodHookParam) = param.callReplacer(replacer)
     })
@@ -173,7 +174,7 @@ inline fun Class<*>.hookBeforeAllConstructors(crossinline hooker: Hooker) =
         override fun beforeHookedMethod(param: MethodHookParam) = param.callHooker(hooker)
     })
 
-inline fun Class<*>.replaceAfterAllConstructors(crossinline hooker: Hooker) =
+inline fun Class<*>.replaceAllConstructors(crossinline hooker: Hooker) =
     hookAllConstructors(object : XC_MethodReplacement() {
         override fun replaceHookedMethod(param: MethodHookParam) = param.callHooker(hooker)
     })
@@ -363,7 +364,12 @@ fun Class<*>.callStaticMethodOrNull(
 
 fun String.findClass(classLoader: ClassLoader?): Class<*> = findClass(this, classLoader)
 
+infix fun String.on(classLoader: ClassLoader?): Class<*> = findClass(this, classLoader)
+
 fun String.findClassOrNull(classLoader: ClassLoader?): Class<*>? =
+    findClassIfExists(this, classLoader)
+
+infix fun String.from(classLoader: ClassLoader?): Class<*>? =
     findClassIfExists(this, classLoader)
 
 fun Class<*>.new(vararg args: Any?): Any = newInstance(this, *args)
@@ -389,6 +395,10 @@ fun <T> T.setObjectField(field: String?, value: Any?) = apply {
 
 fun <T> T.setBooleanField(field: String?, value: Boolean) = apply {
     setBooleanField(this, field, value)
+}
+
+fun <T> T.setFloatField(field: String?, value: Float) = apply {
+    setFloatField(this, field, value)
 }
 
 inline fun XResources.hookLayout(
@@ -438,7 +448,7 @@ fun Any.getFirstFieldByExactType(type: Class<*>): Any? =
 fun <T> Any.getFirstFieldByExactTypeAs(type: Class<*>) =
     javaClass.findFirstFieldByExactType(type).get(this) as? T
 
-inline fun <reified T:Any> Any.getFirstFieldByExactType() =
+inline fun <reified T : Any> Any.getFirstFieldByExactType() =
     javaClass.findFirstFieldByExactType(T::class.java).get(this) as? T
 
 fun Any.getFirstFieldByExactTypeOrNull(type: Class<*>?): Any? = runCatchingOrNull {
@@ -452,16 +462,37 @@ fun <T> Any.getFirstFieldByExactTypeOrNullAs(type: Class<*>?) =
 inline fun <reified T> Any.getFirstFieldByExactTypeOrNull() =
     getFirstFieldByExactTypeOrNull(T::class.java) as? T
 
-fun ClassLoader.allClassesList(delegator: (BaseDexClassLoader) -> BaseDexClassLoader = { x -> x }): List<String> {
+inline fun ClassLoader.findDexClassLoader(crossinline delegator: (BaseDexClassLoader) -> BaseDexClassLoader = { x -> x }): BaseDexClassLoader? {
     var classLoader = this
     while (classLoader !is BaseDexClassLoader) {
         if (classLoader.parent != null) classLoader = classLoader.parent
-        else return emptyList()
+        else return null
     }
-    return delegator(classLoader).getObjectField("pathList")
+    return delegator(classLoader)
+}
+
+inline fun ClassLoader.allClassesList(crossinline delegator: (BaseDexClassLoader) -> BaseDexClassLoader = { x -> x }): List<String> {
+    return findDexClassLoader(delegator)?.getObjectField("pathList")
         ?.getObjectFieldAs<Array<Any>>("dexElements")
         ?.flatMap {
             it.getObjectField("dexFile")?.callMethodAs<Enumeration<String>>("entries")?.toList()
                 .orEmpty()
         }.orEmpty()
 }
+
+val Member.isStatic: Boolean
+    inline get() = Modifier.isStatic(modifiers)
+val Member.isFinal: Boolean
+    inline get() = Modifier.isFinal(modifiers)
+val Member.isPublic: Boolean
+    inline get() = Modifier.isPublic(modifiers)
+val Member.isNotStatic: Boolean
+    inline get() = !isStatic
+val Member.isAbstract: Boolean
+    inline get() = Modifier.isAbstract(modifiers)
+val Member.isPrivate: Boolean
+    inline get() = Modifier.isPrivate(modifiers)
+val Class<*>.isAbstract: Boolean
+    inline get() = !isPrimitive && Modifier.isAbstract(modifiers)
+val Class<*>.isFinal: Boolean
+    inline get() = !isPrimitive && Modifier.isFinal(modifiers)

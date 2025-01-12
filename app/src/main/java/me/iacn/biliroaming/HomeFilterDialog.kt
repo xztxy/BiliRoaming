@@ -1,138 +1,146 @@
 package me.iacn.biliroaming
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.SharedPreferences
-import android.view.LayoutInflater
-import android.widget.Button
-import android.widget.EditText
-import me.iacn.biliroaming.XposedInit.Companion.moduleRes
+import android.view.inputmethod.EditorInfo
+import android.widget.*
 import me.iacn.biliroaming.utils.Log
+import me.iacn.biliroaming.utils.dp
+import me.iacn.biliroaming.utils.migrateHomeFilterPrefsIfNeeded
 
-class HomeFilterDialog(val activity: Activity,prefs: SharedPreferences) : AlertDialog.Builder(activity)  {
+class HomeFilterDialog(activity: Activity, prefs: SharedPreferences) :
+    BaseWidgetDialog(activity) {
     init {
-        val layout = moduleRes.getLayout(R.layout.home_filter_dialog)
-        val inflater = LayoutInflater.from(context)
-        val view = inflater.inflate(layout, null)
+        migrateHomeFilterPrefsIfNeeded()
+        val scrollView = ScrollView(context).apply {
+            scrollBarStyle = ScrollView.SCROLLBARS_OUTSIDE_OVERLAY
+        }
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        scrollView.addView(root)
+        val hideTopSwitch = switchPrefsItem((string(R.string.hide_top_entrance_popular_summary)))
+            .let { root.addView(it.first); it.second }
+        hideTopSwitch.isChecked = prefs.getBoolean("hide_top_entrance_popular", false)
+        val hideFollowSwitch = switchPrefsItem((string(R.string.hide_suggest_follow_popular_summary)))
+            .let { root.addView(it.first); it.second }
+        hideFollowSwitch.isChecked = prefs.getBoolean("hide_suggest_follow_popular", false)
 
-        val lovePlayCount = view.findViewById<EditText>(R.id.hide_low_play_count_recommend)
-        lovePlayCount.setText(prefs.getLong(lovePlayCount.tag.toString(), 100).toString())
-        val shortDuration = view.findViewById<EditText>(R.id.hide_short_duration_recommend)
-        shortDuration.setText(prefs.getInt(shortDuration.tag.toString(), 0).toString())
-        val longDuration = view.findViewById<EditText>(R.id.hide_long_duration_recommend)
-        longDuration.setText(prefs.getInt(longDuration.tag.toString(), 0).toString())
-        val title = view.findViewById<EditText>(R.id.keywords_filter_title_recommend)
-        title.setText(prefs.getString(title.tag.toString(), ""))
-        val reason = view.findViewById<EditText>(R.id.keywords_filter_reason_recommend)
-        reason.setText(prefs.getString(reason.tag.toString(), ""))
-        val uid = view.findViewById<EditText>(R.id.keywords_filter_uid_recommend)
-        uid.setText(prefs.getString(uid.tag.toString(), ""))
-        val upname = view.findViewById<EditText>(R.id.keywords_filter_upname_recommend)
-        upname.setText(prefs.getString(upname.tag.toString(), ""))
-        val rname = view.findViewById<EditText>(R.id.keywords_filter_rname_recommend)
-        rname.setText(prefs.getString(rname.tag.toString(), ""))
-        val tname = view.findViewById<EditText>(R.id.keywords_filter_tname_recommend)
-        tname.setText(prefs.getString(tname.tag.toString(), ""))
+        val applyToRelateSwitch = switchPrefsItem(string(R.string.apply_to_relate_title))
+            .let { root.addView(it.first); it.second }
+        applyToRelateSwitch.isChecked = prefs.getBoolean("home_filter_apply_to_relate", false)
 
-        view.findViewById<Button>(R.id.btn_add_in_title).setOnClickListener {
-            when {
-                title.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                title.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    title.text.append('|')
-                }
-            }
+        root.addView(textInputTitle(string(R.string.hide_low_play_count_recommend_summary)))
+        val lowPlayCountInput = textInputItem(string(R.string.hide_low_play_count_recommend_title))
+            .let { root.addView(it.first); it.second }
+        prefs.getLong("hide_low_play_count_recommend_limit", 0).takeIf { it > 0 }
+            ?.let { lowPlayCountInput.setText(it.toString()) }
+
+        root.addView(textInputTitle(string(R.string.hide_duration_recommend_summary)))
+        val shortDurationInput = textInputItem(string(R.string.hide_short_duration_recommend_title))
+            .let { root.addView(it.first); it.second }
+        val longDurationInput = textInputItem(string(R.string.hide_long_duration_recommend_title))
+            .let { root.addView(it.first); it.second }
+        prefs.getInt("hide_short_duration_recommend_limit", 0).takeIf { it > 0 }
+            ?.let { shortDurationInput.setText(it.toString()) }
+        prefs.getInt("hide_long_duration_recommend_limit", 0).takeIf { it > 0 }
+            ?.let { longDurationInput.setText(it.toString()) }
+
+        root.addView(textInputTitle(string(R.string.keywords_filter_recommend_summary)))
+        val (titleGroup, titleRegexModeSwitch) = root.addKeywordGroup(
+            string(R.string.keyword_group_name_title), showRegex = true
+        )
+        titleRegexModeSwitch.isChecked = prefs.getBoolean("home_filter_title_regex_mode", false)
+        val (reasonGroup, reasonRegexModeSwitch) = root.addKeywordGroup(
+            string(R.string.keyword_group_name_rcmd_reason), showRegex = true
+        )
+        reasonRegexModeSwitch.isChecked = prefs.getBoolean("home_filter_reason_regex_mode", false)
+        val uidGroup = root.addKeywordGroup(
+            string(R.string.keyword_group_name_uid),
+            inputType = EditorInfo.TYPE_CLASS_NUMBER
+        ).first
+        val (upGroup, upRegexModeSwitch) = root.addKeywordGroup(
+            string(R.string.keyword_group_name_up), showRegex = true
+        )
+        upRegexModeSwitch.isChecked = prefs.getBoolean("home_filter_up_regex_mode", false)
+        val categoryGroup = root.addKeywordGroup(string(R.string.keyword_group_name_category)).first
+        val channelGroup = root.addKeywordGroup(string(R.string.keyword_group_name_channel)).first
+        prefs.getStringSet("home_filter_keywords_title", null)?.forEach {
+            titleGroup.addView(keywordInputItem(titleGroup, it).first)
         }
-        view.findViewById<Button>(R.id.btn_add_in_reason).setOnClickListener {
-            when {
-                reason.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                reason.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    reason.text.append('|')
-                }
-            }
+        prefs.getStringSet("home_filter_keywords_reason", null)?.forEach {
+            reasonGroup.addView(keywordInputItem(reasonGroup, it).first)
         }
-        view.findViewById<Button>(R.id.btn_add_in_uid).setOnClickListener {
-            when {
-                uid.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                uid.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    uid.text.append('|')
-                }
-            }
+        prefs.getStringSet("home_filter_keywords_uid", null)?.forEach {
+            uidGroup.addView(keywordInputItem(uidGroup, it, EditorInfo.TYPE_CLASS_NUMBER).first)
         }
-        view.findViewById<Button>(R.id.btn_add_in_upname).setOnClickListener {
-            when {
-                upname.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                upname.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    upname.text.append('|')
-                }
-            }
+        prefs.getStringSet("home_filter_keywords_up", null)?.forEach {
+            upGroup.addView(keywordInputItem(upGroup, it).first)
         }
-        view.findViewById<Button>(R.id.btn_add_in_rname).setOnClickListener {
-            when {
-                rname.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                rname.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    rname.text.append('|')
-                }
-            }
+        prefs.getStringSet("home_filter_keywords_category", null)?.forEach {
+            categoryGroup.addView(keywordInputItem(categoryGroup, it).first)
         }
-        view.findViewById<Button>(R.id.btn_add_in_tname).setOnClickListener {
-            when {
-                tname.text.isEmpty() -> {
-                    Log.toast("你好像还没有输入内容> <")
-                }
-                tname.text.endsWith('|') -> {
-                    Log.toast("啊嘞 上一个分隔符后面好像还没有东西> <")
-                }
-                else -> {
-                    tname.text.append('|')
-                }
-            }
+        prefs.getStringSet("home_filter_keywords_channel", null)?.forEach {
+            channelGroup.addView(keywordInputItem(channelGroup, it).first)
         }
+
+        setTitle(string(R.string.home_filter_title))
 
         setPositiveButton(android.R.string.ok) { _, _ ->
+            val hideTop = hideTopSwitch.isChecked
+            val hideSuggestFollow = hideFollowSwitch.isChecked
+
+            val lowPlayCount = lowPlayCountInput.text.toString().toLongOrNull() ?: 0
+            val shortDuration = shortDurationInput.text.toString().toIntOrNull() ?: 0
+            val longDuration = longDurationInput.text.toString().toIntOrNull() ?: 0
+
+            val titles = titleGroup.getKeywords()
+            val titleRegexMode = titleRegexModeSwitch.isChecked
+            if (titleRegexMode && titles.runCatching { forEach { it.toRegex() } }.isFailure) {
+                Log.toast(string(R.string.invalid_regex), force = true)
+                return@setPositiveButton
+            }
+            val reasons = reasonGroup.getKeywords()
+            val reasonRegexMode = reasonRegexModeSwitch.isChecked
+            if (reasonRegexMode && reasons.runCatching { forEach { it.toRegex() } }.isFailure) {
+                Log.toast(string(R.string.invalid_regex), force = true)
+                return@setPositiveButton
+            }
+            val ups = upGroup.getKeywords()
+            val upRegexMode = upRegexModeSwitch.isChecked
+            if (upRegexMode && ups.runCatching { forEach { it.toRegex() } }.isFailure) {
+                Log.toast(string(R.string.invalid_regex), force = true)
+                return@setPositiveButton
+            }
+
             prefs.edit().apply {
-                putLong(lovePlayCount.tag.toString(), lovePlayCount.text.toString().toLong())
-                putInt(shortDuration.tag.toString(), shortDuration.text.toString().toInt())
-                putInt(longDuration.tag.toString(), longDuration.text.toString().toInt())
-                putString(title.tag.toString(), title.text.toString())
-                putString(reason.tag.toString(), reason.text.toString())
-                putString(uid.tag.toString(), uid.text.toString())
-                putString(upname.tag.toString(), upname.text.toString())
-                putString(rname.tag.toString(), rname.text.toString())
-                putString(tname.tag.toString(), tname.text.toString())
+                putBoolean("hide_top_entrance_popular", hideTop)
+                putBoolean("hide_suggest_follow_popular", hideSuggestFollow)
+                putLong("hide_low_play_count_recommend_limit", lowPlayCount)
+                putInt("hide_short_duration_recommend_limit", shortDuration)
+                putInt("hide_long_duration_recommend_limit", longDuration)
+                putStringSet("home_filter_keywords_title", titles)
+                putStringSet("home_filter_keywords_reason", reasons)
+                putStringSet("home_filter_keywords_uid", uidGroup.getKeywords())
+                putStringSet("home_filter_keywords_up", ups)
+                putStringSet("home_filter_keywords_category", categoryGroup.getKeywords())
+                putStringSet("home_filter_keywords_channel", channelGroup.getKeywords())
+                putBoolean("home_filter_title_regex_mode", titleRegexMode)
+                putBoolean("home_filter_reason_regex_mode", reasonRegexMode)
+                putBoolean("home_filter_up_regex_mode", upRegexMode)
+                putBoolean("home_filter_apply_to_relate", applyToRelateSwitch.isChecked)
             }.apply()
-            Log.toast("保存成功 重启后生效")
+
+            Log.toast(string(R.string.prefs_save_success_and_reboot))
         }
+        setNegativeButton(android.R.string.cancel, null)
 
-        setTitle("首页推送过滤")
+        root.setPadding(16.dp, 10.dp, 16.dp, 10.dp)
 
-        view.setPadding(50, 20, 50, 20)
-
-        setView(view)
+        setView(scrollView)
     }
-
 }
