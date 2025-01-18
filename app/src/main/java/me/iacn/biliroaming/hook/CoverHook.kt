@@ -41,7 +41,7 @@ class CoverHook(classLoader: ClassLoader) : BaseHook(classLoader) {
 
         val gestureDetector =
             GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
-                override fun onLongPress(e: MotionEvent?) {
+                override fun onLongPress(e: MotionEvent) {
                     var url: String? = null
                     var filename: String? = null
                     var title: String? = null
@@ -54,11 +54,13 @@ class CoverHook(classLoader: ClassLoader) : BaseHook(classLoader) {
                                     viewModelField?.type?.declaredMethods?.lastOrNull { it.returnType.name == "com.bilibili.bangumi.data.page.detail.entity.BangumiUniformEpisode" }
                                 val episode =
                                     getObjectField(viewModelField?.name)?.callMethod(episodeMethod?.name)
-                                val hasGson = episode?.javaClass?.annotations?.fold(false) { last, it ->
-                                    last || it.annotationClass.java.name.startsWith("gsonannotator")
+                                val hasGson = episode?.javaClass?.annotations?.any {
+                                    it.annotationClass.java.name.startsWith("gsonannotator")
                                 } ?: false && instance.gsonFromJson() != null && instance.gsonToJson() != null
                                 if (hasGson) {
-                                    val json = gson?.callMethodAs<String>(instance.gsonToJson(), episode)?.toJSONObject()
+                                    val json =
+                                        gson?.callMethodAs<String>(instance.gsonToJson(), episode)
+                                            ?.toJSONObject()
                                     url = json?.optString("cover")
                                     filename = "ep${json?.optInt("id")}"
                                     title = json?.optString("share_copy")
@@ -103,10 +105,11 @@ class CoverHook(classLoader: ClassLoader) : BaseHook(classLoader) {
                                 activity.getObjectField(viewModelField?.name)
                                     ?.getObjectField(roomFeedField?.name)
                                     ?.getObjectField(currentFeedField?.name)?.run {
-                                    url = getObjectFieldAs(coverField?.name)
-                                    filename = "live${getObjectField(roomIdField?.name).toString()}"
-                                    title = getObjectFieldAs(titleField?.name)
-                                }
+                                        url = getObjectFieldAs(coverField?.name)
+                                        filename =
+                                            "live${getObjectField(roomIdField?.name).toString()}"
+                                        title = getObjectFieldAs(titleField?.name)
+                                    }
                             }
                         }
                     } catch (e: Throwable) {
@@ -156,13 +159,13 @@ class CoverHook(classLoader: ClassLoader) : BaseHook(classLoader) {
                                 contentValues
                             )
                             try {
-                                resolver.openOutputStream(uri!!).use { stream ->
+                                resolver.openOutputStream(uri!!)?.use { stream ->
                                     it.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                                    Log.toast(
+                                        "保存封面成功到\n$relativePath${File.separator}$filename.png",
+                                        true
+                                    )
                                 }
-                                Log.toast(
-                                    "保存封面成功到\n$relativePath${File.separator}$filename.png",
-                                    true
-                                )
                             } catch (e: Throwable) {
                                 Log.e(e)
                                 Log.toast("保存封面失败，可能已经保存或未授予权限", true)

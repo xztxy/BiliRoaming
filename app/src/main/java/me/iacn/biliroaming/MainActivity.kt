@@ -23,7 +23,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import me.iacn.biliroaming.hook.SettingHook
 import me.iacn.biliroaming.utils.fetchJson
-import java.io.InputStream
 
 
 /**
@@ -43,6 +42,7 @@ class MainActivity : Activity() {
         private lateinit var runningStatusPref: Preference
         private val scope = MainScope()
 
+        @Deprecated("Deprecated in Java")
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             addPreferencesFromResource(R.xml.main_activity)
@@ -54,11 +54,13 @@ class MainActivity : Activity() {
             checkUpdate()
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onDestroy() {
             super.onDestroy()
             scope.cancel()
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onPreferenceChange(preference: Preference, newValue: Any): Boolean {
             when (preference.key) {
                 "hide_icon" -> {
@@ -79,16 +81,13 @@ class MainActivity : Activity() {
             return true
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onResume() {
             super.onResume()
             when {
                 isModuleActive() -> {
                     runningStatusPref.setTitle(R.string.running_status_enable)
                     runningStatusPref.setSummary(R.string.runtime_xposed)
-                }
-                isAppFuckActive(activity) -> {
-                    runningStatusPref.setTitle(R.string.running_status_enable)
-                    runningStatusPref.setSummary(R.string.runtime_app_fuck)
                 }
                 isTaiChiModuleActive(activity) -> {
                     runningStatusPref.setTitle(R.string.running_status_enable)
@@ -109,9 +108,8 @@ class MainActivity : Activity() {
                 (findPreference("about") as PreferenceCategory).addPreference(Preference(activity).apply {
                     key = "update"
                     title = resources.getString(R.string.update_title)
-                    summary = result.optString("body").substringAfterLast("更新日志\r\n").run {
-                        if (isNotEmpty()) this else resources.getString(R.string.update_summary)
-                    }
+                    summary = result.optString("body").substringAfterLast("更新日志\r\n")
+                        .ifEmpty { resources.getString(R.string.update_summary) }
                     onPreferenceClickListener = this@PrefsFragment
                     order = 1
                 })
@@ -152,6 +150,7 @@ class MainActivity : Activity() {
             return true
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onPreferenceClick(preference: Preference?) = when (preference?.key) {
             "update" -> onUpdateCheck()
             "feature" -> onFeatureClick()
@@ -190,29 +189,6 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 false
             }
-        }
-
-        private fun isAppFuckActive(context: Context): Boolean {
-            try {
-                val appContext = context.createPackageContext(
-                    "com.bug.xposed",
-                    Context.CONTEXT_IGNORE_SECURITY or Context.CONTEXT_INCLUDE_CODE
-                )
-                val mods = appContext.getFileStreamPath("mods")
-                val bugSerializeClass =
-                    appContext.classLoader.loadClass("com.bug.utils.BugSerialize")
-                val modClass = appContext.classLoader.loadClass("com.bug.xposed.ModConfig\$Mod")
-                val list =
-                    bugSerializeClass.getDeclaredMethod("deserialize", InputStream::class.java)
-                        .invoke(null, mods.inputStream()) as ArrayList<*>
-                for (mod in list) {
-                    if (modClass.getMethod("getPkg")
-                            .invoke(mod) == BuildConfig.APPLICATION_ID
-                    ) return true
-                }
-            } catch (e: Throwable) {
-            }
-            return false
         }
     }
 
